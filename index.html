@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Finanzas</title>
+    
+    <!-- 1. Estilos Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 2. React y ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 3. Babel (Para entender el código React en el navegador) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- 4. Firebase (Versión Compat para HTML simple) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <style>
+        /* Estilos para impresión */
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; }
+            .print-only { display: block !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- ICONOS SVG MANUALES (Para no depender de librerías externas complejas) ---
+        const Icon = ({ path, className, size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {path}
+            </svg>
+        );
+
+        const Icons = {
+            ArrowLeft: (p) => <Icon {...p} path={<><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></>} />,
+            Plus: (p) => <Icon {...p} path={<><path d="M5 12h14"/><path d="M12 5v14"/></>} />,
+            Trash2: (p) => <Icon {...p} path={<><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></>} />,
+            Camera: (p) => <Icon {...p} path={<><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>} />,
+            Clock: (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} />,
+            CheckCircle: (p) => <Icon {...p} path={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} />,
+            AlertCircle: (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></>} />,
+            LogOut: (p) => <Icon {...p} path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></>} />,
+            Printer: (p) => <Icon {...p} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />,
+            Mail: (p) => <Icon {...p} path={<><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></>} />,
+            Lock: (p) => <Icon {...p} path={<><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>} />,
+            UserPlus: (p) => <Icon {...p} path={<><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" x2="20" y1="8" y2="14"/><line x1="23" x2="17" y1="11" y2="11"/></>} />,
+            LogIn: (p) => <Icon {...p} path={<><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></>} />,
+            Settings: (p) => <Icon {...p} path={<><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></>} />,
+            TrendingUp: (p) => <Icon {...p} path={<><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>} />
+        };
+
+        const Loader2 = ({ className }) => (
+            <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+        );
+
+        // --- CONFIGURACIÓN FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAqSpQNq1zswQwv9kS61xF9YfOrBr4ZEvI",
+            authDomain: "pagosnic.firebaseapp.com",
+            databaseURL: "https://pagosnic-default-rtdb.firebaseio.com",
+            projectId: "pagosnic",
+            storageBucket: "pagosnic.firebasestorage.app",
+            messagingSenderId: "670554138038",
+            appId: "1:670554138038:web:f30247b8294f0b15750d17"
+        };
+        const IMGBB_API_KEY = "b922654effe3a1ab5ac85cc4c23f97b8";
+
+        // Inicializar Firebase (Versión Compat)
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        // --- UTILIDADES ---
+        const formatMoney = (amount) => new Intl.NumberFormat('es-NI', { style: 'currency', currency: 'NIO', minimumFractionDigits: 2 }).format(amount);
+
+        const formatDate = (dateString) => {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+            const offsetDate = new Date(date.getTime() + userTimezoneOffset);
+            return offsetDate.toLocaleDateString('es-NI', { year: 'numeric', month: 'short', day: 'numeric' });
+        };
+
+        const generateInstallments = (total, count, startDate, frequency, customDays = 0) => {
+            const amountPerInstallment = total / count;
+            const installments = [];
+            let currentDate = new Date(startDate);
+            const userTimezoneOffset = currentDate.getTimezoneOffset() * 60000;
+            currentDate = new Date(currentDate.getTime() + userTimezoneOffset);
+
+            for (let i = 0; i < count; i++) {
+                installments.push({
+                id: i + 1,
+                dueDate: currentDate.toISOString().split('T')[0],
+                amount: amountPerInstallment
+                });
+                
+                if (frequency === 'weekly') currentDate.setDate(currentDate.getDate() + 7);
+                else if (frequency === 'biweekly') currentDate.setDate(currentDate.getDate() + 14);
+                else if (frequency === 'semimonthly') currentDate.setDate(currentDate.getDate() + 15);
+                else if (frequency === 'monthly') currentDate.setMonth(currentDate.getMonth() + 1);
+                else if (frequency === 'custom' && customDays > 0) currentDate.setDate(currentDate.getDate() + parseInt(customDays));
+            }
+            return installments;
+        };
+
+        // --- COMPONENTE PRINCIPAL (APP) ---
+        function App() {
+            const [user, setUser] = useState(null);
+            const [view, setView] = useState('login'); 
+            const [debts, setDebts] = useState([]);
+            const [selectedDebtId, setSelectedDebtId] = useState(null);
+            
+            const [loading, setLoading] = useState(false);
+            const [uploading, setUploading] = useState(false);
+
+            // Auth States
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [isRegistering, setIsRegistering] = useState(false);
+            const [authError, setAuthError] = useState('');
+
+            const [formData, setFormData] = useState({ 
+                title: '', amount: '', type: 'simple', 
+                startDate: new Date().toISOString().split('T')[0], 
+                installmentsCount: 2, 
+                frequency: 'monthly',
+                customFrequencyDays: '' 
+            });
+            
+            const [payData, setPayData] = useState({ amount: '', date: new Date().toISOString().split('T')[0], receipt: '', file: null });
+
+            // LOGICA
+            useEffect(() => {
+                const unsubscribe = auth.onAuthStateChanged((u) => {
+                    setUser(u);
+                    if (u) {
+                        setView('list');
+                        setEmail('');
+                        setPassword('');
+                        setAuthError('');
+                    } else {
+                        setView('login');
+                    }
+                });
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (user) {
+                    const debtsRef = db.ref(`users/${user.uid}/debts`);
+                    debtsRef.on('value', (snap) => {
+                        const data = snap.val();
+                        const loaded = [];
+                        if (data) {
+                            Object.keys(data).forEach(key => {
+                                const d = data[key];
+                                loaded.push({
+                                    id: key,
+                                    ...d,
+                                    payments: d.payments ? Object.values(d.payments) : [],
+                                    charges: d.extraCharges ? Object.values(d.extraCharges) : []
+                                });
+                            });
+                        }
+                        setDebts(loaded.reverse());
+                    });
+                    return () => debtsRef.off();
+                }
+            }, [user]);
+
+            const handleAuth = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setAuthError('');
+                try {
+                    if (isRegistering) {
+                        await auth.createUserWithEmailAndPassword(email, password);
+                    } else {
+                        await auth.signInWithEmailAndPassword(email, password);
+                    }
+                } catch (error) {
+                    if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+                        setAuthError("Correo o contraseña incorrectos.");
+                    } else if (error.code === 'auth/email-already-in-use') {
+                        setAuthError("Este correo ya está registrado.");
+                    } else if (error.code === 'auth/weak-password') {
+                        setAuthError("La contraseña debe tener al menos 6 caracteres.");
+                    } else {
+                        setAuthError("Error: " + error.message);
+                    }
+                }
+                setLoading(false);
+            };
+
+            const uploadToImgBB = async (file) => {
+                const d = new FormData(); d.append("image", file);
+                const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: d });
+                const j = await res.json();
+                return j.success ? j.data.url : null;
+            };
+
+            const createDebt = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                try {
+                    const total = parseFloat(formData.amount);
+                    let installments = [];
+                    
+                    if (formData.type === 'installments') {
+                        installments = generateInstallments(
+                            total, 
+                            parseInt(formData.installmentsCount), 
+                            formData.startDate, 
+                            formData.frequency,
+                            formData.customFrequencyDays
+                        );
+                    } else {
+                        installments = [{ id: 1, dueDate: formData.startDate, amount: total }];
+                    }
+
+                    await db.ref(`users/${user.uid}/debts`).push({
+                        title: formData.title,
+                        initialAmount: total,
+                        type: formData.type,
+                        installments: installments, 
+                        createdAt: new Date().toISOString()
+                    });
+                    setFormData({ 
+                        title: '', amount: '', type: 'simple', 
+                        startDate: new Date().toISOString().split('T')[0], 
+                        installmentsCount: 2, 
+                        frequency: 'monthly',
+                        customFrequencyDays: '' 
+                    });
+                    setView('list');
+                } catch (err) { alert(err.message); }
+                setLoading(false);
+            };
+
+            const addPayment = async (e) => {
+                e.preventDefault();
+                setUploading(true);
+                try {
+                    let url = payData.file ? await uploadToImgBB(payData.file) : "";
+                    await db.ref(`users/${user.uid}/debts/${selectedDebtId}/payments`).push({
+                        amount: parseFloat(payData.amount),
+                        date: payData.date,
+                        receiptNumber: payData.receipt || 'S/N',
+                        imageUrl: url,
+                        timestamp: new Date().toISOString()
+                    });
+                    setPayData({ ...payData, amount: '', receipt: '', file: null });
+                    alert("Abono registrado");
+                } catch (err) { alert(err.message); }
+                setUploading(false);
+            };
+
+            const getDebtAnalysis = (debt) => {
+                const initial = parseFloat(debt.initialAmount);
+                const extra = (debt.charges || []).reduce((s, c) => s + (parseFloat(c.amount)||0), 0);
+                const paidTotal = (debt.payments || []).reduce((s, p) => s + (parseFloat(p.amount)||0), 0);
+                const totalDebt = initial + extra;
+                const remaining = totalDebt - paidTotal;
+
+                let paidAccumulator = paidTotal;
+                let nextDue = null;
+                
+                const installmentsStatus = (debt.installments || []).map(inst => {
+                    const amount = parseFloat(inst.amount);
+                    let status = 'pending';
+                    let paidForThis = 0;
+
+                    if (paidAccumulator >= amount) {
+                        status = 'paid';
+                        paidForThis = amount;
+                        paidAccumulator -= amount;
+                    } else if (paidAccumulator > 0) {
+                        status = 'partial';
+                        paidForThis = paidAccumulator;
+                        paidAccumulator = 0;
+                    } else {
+                        status = 'pending';
+                        paidForThis = 0;
+                    }
+
+                    const isOverdue = status !== 'paid' && new Date(inst.dueDate) < new Date();
+                    if (!nextDue && status !== 'paid') {
+                        nextDue = { date: inst.dueDate, amount: amount - paidForThis, isOverdue };
+                    }
+                    return { ...inst, status, paidForThis, isOverdue };
+                });
+
+                return { totalDebt, paidTotal, remaining, installmentsStatus, nextDue };
+            };
+
+            // --- VISTAS RENDERIZADAS ---
+
+            if (view === 'login') return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-6">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
+                        <div className="text-center mb-6">
+                            <div className="bg-blue-100 p-3 rounded-full inline-block mb-2">
+                                <Icons.TrendingUp className="text-blue-600" size={32} />
+                            </div>
+                            <h1 className="text-2xl font-bold text-gray-800">Mis Finanzas</h1>
+                            <p className="text-gray-500 text-sm">Gestiona tus deudas personales</p>
+                        </div>
+
+                        <form onSubmit={handleAuth} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1 ml-1">Correo Electrónico</label>
+                                <div className="relative">
+                                    <div className="absolute left-3 top-3 text-gray-400"><Icons.Mail size={18} /></div>
+                                    <input type="email" required className="w-full pl-10 p-3 border rounded-lg bg-gray-50 outline-none focus:border-blue-500 transition" placeholder="ejemplo@correo.com" value={email} onChange={e => setEmail(e.target.value)} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1 ml-1">Contraseña</label>
+                                <div className="relative">
+                                    <div className="absolute left-3 top-3 text-gray-400"><Icons.Lock size={18} /></div>
+                                    <input type="password" required minLength={6} className="w-full pl-10 p-3 border rounded-lg bg-gray-50 outline-none focus:border-blue-500 transition" placeholder="******" value={password} onChange={e => setPassword(e.target.value)} />
+                                </div>
+                            </div>
+                            {authError && (
+                                <div className="bg-red-50 text-red-600 text-xs p-3 rounded-lg flex items-center">
+                                    <span className="mr-2"><Icons.AlertCircle size={14} /></span>
+                                    {authError}
+                                </div>
+                            )}
+                            <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition flex justify-center items-center shadow-md active:scale-95">
+                                {loading ? <Loader2 className="animate-spin" /> : (isRegistering ? <><span className="mr-2"><Icons.UserPlus size={18} /></span> Crear Cuenta</> : <><span className="mr-2"><Icons.LogIn size={18} /></span> Iniciar Sesión</>)}
+                            </button>
+                        </form>
+
+                        <div className="mt-6 text-center border-t pt-4">
+                            <p className="text-sm text-gray-600 mb-2">{isRegistering ? "¿Ya tienes una cuenta?" : "¿No tienes cuenta?"}</p>
+                            <button onClick={() => { setIsRegistering(!isRegistering); setAuthError(''); }} className="text-blue-600 font-bold hover:underline text-sm">
+                                {isRegistering ? "Inicia Sesión aquí" : "Regístrate gratis"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            if (view === 'create') return (
+                <div className="min-h-screen bg-gray-50 p-4 max-w-md mx-auto">
+                    <header className="flex items-center mb-6">
+                        <button onClick={() => setView('list')} className="mr-4 text-gray-600"><Icons.ArrowLeft /></button>
+                        <h1 className="font-bold text-xl text-gray-800">Nueva Deuda</h1>
+                    </header>
+                    <form onSubmit={createDebt} className="bg-white p-6 rounded-xl shadow-sm space-y-4">
+                        <div>
+                            <label className="text-sm font-bold text-gray-700">Acreedor / Concepto</label>
+                            <input required type="text" className="w-full p-3 border rounded-lg bg-gray-50" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Ej. Casa Comercial" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-bold text-gray-700">Monto Total (C$)</label>
+                            <input required type="number" className="w-full p-3 border rounded-lg bg-gray-50" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" />
+                        </div>
+
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                            <button type="button" onClick={() => setFormData({...formData, type: 'simple'})} className={`flex-1 py-2 rounded-md text-sm font-medium ${formData.type === 'simple' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Un solo pago</button>
+                            <button type="button" onClick={() => setFormData({...formData, type: 'installments'})} className={`flex-1 py-2 rounded-md text-sm font-medium ${formData.type === 'installments' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>A Plazos</button>
+                        </div>
+
+                        {formData.type === 'installments' && (
+                            <div className="space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-100 animate-in fade-in">
+                                <h3 className="font-bold text-blue-800 text-sm flex items-center"><span className="mr-2"><Icons.Settings size={14} /></span> Configurar Plazos</h3>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs text-blue-700 font-bold">Inicio Pagos</label>
+                                        <input type="date" className="w-full p-2 border rounded text-sm" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-blue-700 font-bold">Nº Cuotas</label>
+                                        <input type="number" min="2" className="w-full p-2 border rounded text-sm" value={formData.installmentsCount} onChange={e => setFormData({...formData, installmentsCount: e.target.value})} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-blue-700 font-bold">Frecuencia de Pago</label>
+                                    <div className="relative">
+                                        <select className="w-full p-2 border rounded text-sm appearance-none bg-white" value={formData.frequency} onChange={e => setFormData({...formData, frequency: e.target.value})}>
+                                            <option value="weekly">Semanal (Cada 7 días)</option>
+                                            <option value="biweekly">Catorcenal (Cada 14 días)</option>
+                                            <option value="semimonthly">Quincenal (Cada 15 días)</option>
+                                            <option value="monthly">Mensual (Cada mes)</option>
+                                            <option value="custom">Otro (Personalizado)</option>
+                                        </select>
+                                        <div className="absolute right-3 top-3 text-gray-400 pointer-events-none"><Icons.Clock size={14} /></div>
+                                    </div>
+                                </div>
+                                {formData.frequency === 'custom' && (
+                                    <div>
+                                        <label className="text-xs text-blue-700 font-bold">¿Cada cuántos días?</label>
+                                        <input type="number" min="1" placeholder="Ej. 3 (Cada 3 días)" className="w-full p-2 border rounded text-sm border-blue-300 focus:ring-2 focus:ring-blue-200 outline-none" value={formData.customFrequencyDays} onChange={e => setFormData({...formData, customFrequencyDays: e.target.value})} />
+                                    </div>
+                                )}
+                                <div className="text-xs text-blue-600 font-medium text-center bg-blue-100 p-2 rounded">
+                                    {formData.installmentsCount} pagos de {formData.amount && formData.installmentsCount ? formatMoney(formData.amount / formData.installmentsCount) : '$0'} aprox.
+                                </div>
+                            </div>
+                        )}
+                        <button disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition">
+                            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Guardar Deuda'}
+                        </button>
+                    </form>
+                </div>
+            );
+
+            if (view === 'detail') {
+                const debt = debts.find(d => d.id === selectedDebtId);
+                if(!debt) return null;
+                const { remaining, totalDebt, paidTotal, installmentsStatus } = getDebtAnalysis(debt);
+                const progress = Math.min(100, (paidTotal / totalDebt) * 100);
+
+                return (
+                    <div className="min-h-screen bg-gray-50 font-sans max-w-md mx-auto">
+                        <header className="bg-white p-4 shadow-sm flex justify-between sticky top-0 z-10 no-print">
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setView('list')}><Icons.ArrowLeft /></button>
+                                <h1 className="font-bold text-lg truncate w-48 text-gray-800">{debt.title}</h1>
+                            </div>
+                            <button onClick={() => window.print()} className="bg-gray-100 p-2 rounded-full"><Icons.Printer size={20}/></button>
+                        </header>
+
+                        <div className="p-4 space-y-6">
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+                                <p className="text-xs uppercase text-gray-400 font-bold tracking-wider">Deuda Restante</p>
+                                <p className={`text-4xl font-extrabold my-2 ${remaining <= 0 ? 'text-green-500' : 'text-gray-800'}`}>{formatMoney(remaining)}</p>
+                                <div className="w-full bg-gray-100 rounded-full h-3 mb-4 overflow-hidden no-print">
+                                    <div className="bg-blue-600 h-full transition-all duration-500" style={{width: `${progress}%`}}></div>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <div className="text-left"><span className="block text-gray-400 text-xs">Total a pagar</span><span className="font-bold">{formatMoney(totalDebt)}</span></div>
+                                    <div className="text-right"><span className="block text-gray-400 text-xs">Total Abonado</span><span className="font-bold text-green-600">{formatMoney(paidTotal)}</span></div>
+                                </div>
+                            </div>
+
+                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 no-print">
+                                <h3 className="font-bold text-blue-800 text-sm mb-3 flex items-center"><span className="mr-1"><Icons.Plus size={16} /></span> Registrar Abono</h3>
+                                <form onSubmit={addPayment} className="flex gap-2 items-center">
+                                    <div className="flex-1 relative">
+                                        <span className="absolute left-2 top-2 text-blue-300 font-bold">C$</span>
+                                        <input type="number" step="0.01" className="w-full pl-8 p-2 rounded border border-blue-200 text-sm" placeholder="Monto" value={payData.amount} onChange={e => setPayData({...payData, amount: e.target.value})} />
+                                    </div>
+                                    <label className="p-2 bg-white rounded border border-blue-200 cursor-pointer">
+                                        <span className={payData.file ? "text-green-500" : "text-gray-400"}><Icons.Camera size={20} /></span>
+                                        <input type="file" className="hidden" onChange={e => setPayData({...payData, file: e.target.files[0]})} />
+                                    </label>
+                                    <button disabled={uploading} className="bg-blue-600 text-white p-2 rounded text-sm font-bold w-20 flex justify-center">{uploading ? <Loader2 className="animate-spin" size={18} /> : 'Pagar'}</button>
+                                </form>
+                                <input type="date" value={payData.date} onChange={e => setPayData({...payData, date: e.target.value})} className="mt-2 text-xs p-1 bg-transparent text-blue-600 border-none outline-none" />
+                            </div>
+
+                            <div>
+                                <h3 className="font-bold text-gray-800 mb-3 flex items-center"><span className="mr-2"><Icons.Clock size={16} /></span> Plan de Pagos</h3>
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                    {installmentsStatus.map((inst, idx) => (
+                                        <div key={idx} className={`flex justify-between items-center p-3 border-b last:border-0 ${inst.status === 'paid' ? 'bg-green-50' : ''}`}>
+                                            <div className="flex items-center gap-3">
+                                                {inst.status === 'paid' ? <span className="text-green-500"><Icons.CheckCircle size={18} /></span> : inst.isOverdue ? <span className="text-red-500"><Icons.AlertCircle size={18} /></span> : <div className="w-4 h-4 rounded-full border-2 border-gray-300"></div>}
+                                                <div>
+                                                    <p className={`text-sm font-bold ${inst.status === 'paid' ? 'text-green-800' : inst.isOverdue ? 'text-red-600' : 'text-gray-600'}`}>Cuota #{inst.id}</p>
+                                                    <p className="text-xs text-gray-400">{formatDate(inst.dueDate)}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm font-bold">{formatMoney(inst.amount)}</p>
+                                                {inst.status === 'partial' && <p className="text-[10px] text-orange-500 font-bold">Resta: {formatMoney(inst.amount - inst.paidForThis)}</p>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 className="font-bold text-gray-800 mb-3">Historial de Depósitos</h3>
+                                <div className="space-y-2">
+                                    {(debt.payments || []).length === 0 && <p className="text-gray-400 text-sm italic">No hay depósitos aún.</p>}
+                                    {(debt.payments || []).slice().reverse().map((pay, i) => (
+                                        <div key={i} className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-100 text-sm">
+                                            <div>
+                                                <p className="font-bold text-gray-800">{formatMoney(pay.amount)}</p>
+                                                <p className="text-xs text-gray-500">{formatDate(pay.date)}</p>
+                                            </div>
+                                            {pay.imageUrl && <a href={pay.imageUrl} target="_blank" className="text-blue-500 text-xs hover:underline">Ver Foto</a>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'list') {
+                const totalRemaining = debts.reduce((sum, d) => sum + getDebtAnalysis(d).remaining, 0);
+                return (
+                    <div className="min-h-screen bg-gray-100 font-sans max-w-md mx-auto">
+                        <header className="bg-white p-4 flex justify-between items-center shadow-sm sticky top-0 z-10">
+                            <div>
+                                <h1 className="font-bold text-xl text-gray-800">Mis Finanzas</h1>
+                                <p className="text-xs text-gray-500 truncate max-w-[150px]">{user.email}</p>
+                            </div>
+                            <button onClick={() => auth.signOut()} className="text-gray-500 hover:text-red-500 transition"><Icons.LogOut size={20} /></button>
+                        </header>
+
+                        <div className="p-4 space-y-6">
+                            <div className="bg-slate-800 rounded-2xl p-6 text-white shadow-lg">
+                                <p className="text-slate-400 text-xs uppercase font-bold">Deuda Total Activa</p>
+                                <h2 className="text-4xl font-bold mt-1">{formatMoney(totalRemaining)}</h2>
+                            </div>
+
+                            <button onClick={() => setView('create')} className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold shadow-lg hover:bg-blue-700 flex justify-center items-center gap-2 active:scale-95 transition">
+                                <Icons.Plus /> Nueva Deuda
+                            </button>
+
+                            <div className="space-y-4 pb-10">
+                                {debts.map(debt => {
+                                    const { remaining, totalDebt, paidTotal, nextDue } = getDebtAnalysis(debt);
+                                    const progress = (paidTotal / totalDebt) * 100;
+                                    return (
+                                        <div key={debt.id} onClick={() => { setSelectedDebtId(debt.id); setView('detail'); }} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <h3 className="font-bold text-gray-800 text-lg">{debt.title}</h3>
+                                                {remaining <= 0 ? <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-bold">PAGADO</span> : <span className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full font-bold">ACTIVO</span>}
+                                            </div>
+                                            <div className="w-full bg-gray-100 rounded-full h-2 mb-3">
+                                                <div className={`h-full rounded-full ${remaining <= 0 ? 'bg-green-500' : 'bg-blue-600'}`} style={{width: `${progress}%`}}></div>
+                                            </div>
+                                            {remaining > 0 && nextDue && (
+                                                <div className={`mt-3 p-2 rounded-lg text-xs flex items-center justify-between ${nextDue.isOverdue ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-gray-50 text-gray-600'}`}>
+                                                    <div className="flex items-center gap-2"><Icons.Clock size={14} /><span>Próximo pago: <b>{formatDate(nextDue.date)}</b></span></div>
+                                                    <span className="font-bold">{formatMoney(nextDue.amount)}</span>
+                                                </div>
+                                            )}
+                                            {remaining > 0 && !nextDue && debt.type !== 'installments' && <p className="text-xs text-gray-400 mt-2">Pago único pendiente</p>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
+
+
